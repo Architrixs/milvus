@@ -3,8 +3,6 @@ name: Release windows
 on:
   release:
     types: [created]
-    tags:
-      - windows-*
 
 jobs:
   windows:
