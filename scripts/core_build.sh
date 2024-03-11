@@ -31,51 +31,6 @@ if [[ ! ${jobs+1} ]]; then
     fi
 fi
 
-function get_cpu_arch {
-  local CPU_ARCH=$1
-
-  local OS
-  OS=$(uname)
-  local MACHINE
-  MACHINE=$(uname -m)
-  ADDITIONAL_FLAGS=""
-
-  if [ -z "$CPU_ARCH" ]; then
-
-    if [ "$OS" = "Darwin" ]; then
-
-      if [ "$MACHINE" = "x86_64" ]; then
-        local CPU_CAPABILITIES
-        CPU_CAPABILITIES=$(sysctl -a | grep machdep.cpu.features | awk '{print tolower($0)}')
-
-        if [[ $CPU_CAPABILITIES =~ "avx" ]]; then
-          CPU_ARCH="avx"
-        else
-          CPU_ARCH="sse"
-        fi
-
-      elif [[ $(sysctl -a | grep machdep.cpu.brand_string) =~ "Apple" ]]; then
-        # Apple silicon.
-        CPU_ARCH="arm64"
-      fi
-
-    else [ "$OS" = "Linux" ];
-
-      local CPU_CAPABILITIES
-      CPU_CAPABILITIES=$(cat /proc/cpuinfo | grep flags | head -n 1| awk '{print tolower($0)}')
-
-      if [[ "$CPU_CAPABILITIES" =~ "avx" ]]; then
-            CPU_ARCH="avx"
-      elif [[ "$CPU_CAPABILITIES" =~ "sse" ]]; then
-            CPU_ARCH="sse"
-      elif [ "$MACHINE" = "aarch64" ]; then
-            CPU_ARCH="aarch64"
-      fi
-    fi
-  fi
-  echo -n $CPU_ARCH
-}
-
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
@@ -102,10 +57,8 @@ CUDA_ARCH="DEFAULT"
 CUSTOM_THIRDPARTY_PATH=""
 EMBEDDED_MILVUS="OFF"
 BUILD_DISK_ANN="OFF"
-USE_ASAN="OFF"
-OPEN_SIMD="OFF"
 
-while getopts "p:d:t:s:f:n:i:ulrcghzmeba" arg; do
+while getopts "p:d:t:s:f:n:ulrcghzmeb" arg; do
   case $arg in
   f)
     CUSTOM_THIRDPARTY_PATH=$OPTARG
@@ -152,13 +105,6 @@ while getopts "p:d:t:s:f:n:i:ulrcghzmeba" arg; do
   n)
     BUILD_DISK_ANN=$OPTARG
     ;;
-  a)
-    USE_ASAN="ON"
-    BUILD_TYPE=Debug
-    ;;
-  i)
-    OPEN_SIMD=$OPTARG
-    ;;
   h) # help
     echo "
 
@@ -176,7 +122,6 @@ parameter:
 -e: build without prometheus(default: OFF)
 -s: build with CUDA arch(default:DEFAULT), for example '-gencode=compute_61,code=sm_61;-gencode=compute_75,code=sm_75'
 -b: build embedded milvus(default: OFF)
--a: build milvus with AddressSanitizer
 -h: help
 
 usage:
@@ -235,34 +180,17 @@ fi
 
 unameOut="$(uname -s)"
 case "${unameOut}" in
-  Darwin*)
-    # detect llvm version by valid list
-    for llvm_version in 15 14 NOT_FOUND ; do
-      if brew ls --versions llvm@${llvm_version} > /dev/null; then
-        break
-      fi
-    done
-    if [ "${llvm_version}" = "NOT_FOUND" ] ; then
-      echo "valid llvm(14 or 15) not installed"
-      exit 1
-    fi
-    llvm_prefix="$(brew --prefix llvm@${llvm_version})"
-    export CLANG_TOOLS_PATH="${llvm_prefix}/bin"
-    export CC="${llvm_prefix}/bin/clang"
-    export CXX="${llvm_prefix}/bin/clang++"
-    export CFLAGS="-Wno-deprecated-declarations -I$(brew --prefix libomp)/include"
-    export CXXFLAGS=${CFLAGS}
-    export LDFLAGS="-L$(brew --prefix libomp)/lib"
-    ;;
-  Linux*)
-    ;;
-  *)   
-    echo "Cannot build on windows"
-    ;;
+    Darwin*)
+        llvm_prefix="$(brew --prefix llvm)"
+        export CLANG_TOOLS_PATH="${llvm_prefix}/bin"
+        export CC="${llvm_prefix}/bin/clang"
+        export CXX="${llvm_prefix}/bin/clang++"
+        export LDFLAGS="-L${llvm_prefix}/lib -L/usr/local/opt/libomp/lib"
+        export CXXFLAGS="-I${llvm_prefix}/include -I/usr/local/include -I/usr/local/opt/libomp/include"
+        ;;
+          *)   echo "==System:${unameOut}";
 esac
 
-
-CPU_ARCH=$(get_cpu_arch $CPU_TARGET)
 
 CMAKE_CMD="cmake \
 ${CMAKE_EXTRA_ARGS} \
@@ -280,9 +208,6 @@ ${CMAKE_EXTRA_ARGS} \
 -DCUSTOM_THIRDPARTY_DOWNLOAD_PATH=${CUSTOM_THIRDPARTY_PATH} \
 -DEMBEDDED_MILVUS=${EMBEDDED_MILVUS} \
 -DBUILD_DISK_ANN=${BUILD_DISK_ANN} \
--DUSE_ASAN=${USE_ASAN} \
--DOPEN_SIMD=${OPEN_SIMD} \
--DCPU_ARCH=${CPU_ARCH} \
 ${CPP_SRC_DIR}"
 
 echo ${CMAKE_CMD}
