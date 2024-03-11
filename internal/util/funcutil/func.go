@@ -58,7 +58,16 @@ func CheckGrpcReady(ctx context.Context, targetCh chan error) {
 
 // GetLocalIP return the local ip address
 func GetLocalIP() string {
-	return ipv4.LocalIP()
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, addr := range addrs {
+			ipaddr, ok := addr.(*net.IPNet)
+			if ok && ipaddr.IP.IsGlobalUnicast() && ipaddr.IP.To4() != nil {
+				return ipaddr.IP.String()
+			}
+		}
+	}
+	return "127.0.0.1"
 }
 
 // WaitForComponentStates wait for component's state to be one of the specific states

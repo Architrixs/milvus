@@ -82,7 +82,7 @@ func (p *grpcConfig) init(domain string) {
 
 // LoadFromEnv is used to initialize configuration items from env.
 func (p *grpcConfig) LoadFromEnv() {
-	p.IP = ipv4.LocalIP()
+	p.IP = funcutil.GetLocalIP()
 }
 
 // LoadFromArgs is used to initialize configuration items from args.
