@@ -1,0 +1,59 @@
+name: Release windows
+
+# This workflow is triggered on pushes or pull request to the repository.
+on:
+  push:
+    tags:
+      - windows-*
+
+jobs:
+  windows:
+    name: Release windows
+    runs-on: windows-2019
+    timeout-minutes: 90
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Cache go
+        uses: actions/cache@v3
+        with:
+          path: |
+            %LocalAppData%\go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+      - name: Cache ccache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('internal/core/**') }}
+          restore-keys: ${{ runner.os }}-ccache-
+      - name: Configure Toolchain
+        uses: msys2/setup-msys2@v2.12.0
+        with:
+          msystem: mingw64
+      - name: Install Deps
+        shell: msys2 {0}
+        run: |
+          sh scripts/install_deps_msys.sh
+      - name: Build Milvus and package
+        shell: msys2 {0}
+        env:
+          CCACHE_COMPILERCHECK: content
+          CCACHE_COMPRESS: 1
+          CCACHE_COMPRESSLEVEL: 5
+          CCACHE_MAXSIZE: 2G
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          mingw32-make
+          sh scripts/package_windows.sh
+      - name: release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "windows_package/milvus*.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
