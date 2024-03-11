@@ -26,7 +26,7 @@ pacmanInstall()
     mingw-w64-x86_64-go \
     mingw-w64-x86_64-zstd
   pacman -U --noconfirm \
-    https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rocksdb-6.26.1-1-any.pkg.tar.zst
+    https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rocksdb-7.10.2-1-any.pkg.tar.zst
 }
 
 updateKey()
